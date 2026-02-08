@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  aatsu:
+    build: .
+    container_name: aatsu-tracker
+    environment:
+      - SHOKO_BASE_URL=http://10.0.0.13:8111
+      - SHOKO_API_KEY=${SHOKO_API_KEY}
+      - NTFY_URL=${NTFY_URL}
+      - NTFY_AUTH=${NTFY_AUTH}
+      - DOWNLOAD_TOKEN=${DOWNLOAD_TOKEN}
+      - API_BASE_URL=${API_BASE_URL}
+      - PORT=${PORT:-3000}
+      - QBITTORRENT_URL=${QBITTORRENT_URL}
+      - QBITTORRENT_USERNAME=${QBITTORRENT_USERNAME}
+      - QBITTORRENT_PASSWORD=${QBITTORRENT_PASSWORD}
+      - NODE_ENV=production
+    restart: unless-stopped

@@ -1,0 +1,22 @@
+{
+  "name": "aatsu",
+  "version": "1.0.0",
+  "description": "Anime release tracker - monitors Nyaa.si for new releases and sends notifications",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "private": true,
+  "dependencies": {
+    "@robertklep/qbittorrent": "^1.0.1",
+    "axios": "^1.13.4",
+    "cheerio": "^1.0.0-rc.12",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.4",
+    "express": "^4.22.1",
+    "node-schedule": "^2.1.1",
+    "rss-parser": "^3.13.0"
+  }
+}
