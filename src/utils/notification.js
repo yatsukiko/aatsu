@@ -27,23 +27,27 @@ export async function sendReleaseNotification(episode, release, groupName) {
         const apiBaseUrl = getApiBaseUrl();
         const actions = apiBaseUrl
             ? [
-                {
-                    action: 'http',
-                    label: 'Download',
-                    url: `${apiBaseUrl}/download`,
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Download-Token': process.env.DOWNLOAD_TOKEN || ''
-                    },
-                    body: JSON.stringify({
-                        magnet: release.magnet,
-                        title: release.title,
-                        episodeId: episode.shokoEid,
-                        fileList: release.fileList
-                    }),
-                    clear: true
-                },
+                ...(release.magnet && Array.isArray(release.fileList) && release.fileList.length > 0
+                    ? [
+                        {
+                            action: 'http',
+                            label: 'Download',
+                            url: `${apiBaseUrl}/download`,
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-Download-Token': process.env.DOWNLOAD_TOKEN || ''
+                            },
+                            body: JSON.stringify({
+                                magnet: release.magnet,
+                                title: release.title,
+                                episodeId: episode.shokoEid,
+                                fileList: release.fileList
+                            }),
+                            clear: true
+                        }
+                    ]
+                    : []),
                 {
                     action: 'http',
                     label: 'Ignore',

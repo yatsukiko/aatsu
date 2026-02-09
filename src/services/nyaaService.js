@@ -11,7 +11,34 @@ import * as nyaa from '../../lib/nyaa.js';
 export async function checkRSSForEpisode(animeTitle, epNumber) {
     try {
         const foundAll = await nyaa.findTitleInRSS(animeTitle);
-        return foundAll ? foundAll.filter(release => release.episode === epNumber) : [];
+        const matches = foundAll.filter(release => release.episode === epNumber);
+
+        const enhanced = [];
+        let currentDelay = 0.2;
+        for (let i = 0; i < matches.length; i++) {
+            const release = matches[i];
+            try {
+                const scrapedData = await scrapeWithRetry(release.url, currentDelay);
+                enhanced.push({
+                    ...release,
+                    ...(scrapedData || {}),
+                    url: release.url,
+                    id: release.id,
+                    title: release.title,
+                    season: release.season ?? null,
+                    episode: release.episode ?? null,
+                });
+            } catch (e) {
+                console.warn(`⚠ Could not scrape data for: ${release.title}, error: ${e}`);
+                enhanced.push(release);
+            }
+
+            if (i < matches.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, currentDelay * 1000));
+            }
+        }
+
+        return enhanced;
     } catch (error) {
         console.error(`✗ RSS check failed for ${animeTitle}:`, error.message);
         return [];
@@ -21,7 +48,7 @@ export async function checkRSSForEpisode(animeTitle, epNumber) {
 /**
  * Retry a request with exponential backoff on 429 errors
  */
-async function scrapeWithRetry(url, initialDelay = 0.2) {
+export async function scrapeWithRetry(url, initialDelay = 0.2) {
     let delay = initialDelay;
     while (true) {
         try {
