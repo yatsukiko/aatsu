@@ -25,7 +25,6 @@ COPY package*.json ./
 COPY config.js ./
 COPY src/ ./src/
 COPY lib/ ./lib/
-COPY tools/ ./tools/
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
