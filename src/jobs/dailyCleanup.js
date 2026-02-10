@@ -4,7 +4,7 @@
  */
 
 import schedule from 'node-schedule';
-import { getScheduledEpisodes, checkNyaas } from './episodeMonitor.js';
+import { getScheduledEpisodes, cleanupAllEpisodeJobs, checkNyaas } from './episodeMonitor.js';
 import { clearNotificationHistory } from '../services/releaseProcessor.js';
 
 /**
@@ -28,6 +28,9 @@ async function dailyCleanupAndRestart() {
         scheduledEpisodes.forEach(episodeKey => {
             console.log(`   ✓ Removed: ${episodeKey}`);
         });
+
+        const { episodeCount, cancelledCount } = cleanupAllEpisodeJobs();
+        console.log(`✓ Cancelled ${cancelledCount} job(s) for ${episodeCount} episode(s)`);
         
         // Clear notification history for a fresh start
         clearNotificationHistory();

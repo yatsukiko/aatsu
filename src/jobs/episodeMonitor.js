@@ -61,23 +61,39 @@ async function scheduleEpisodeJobs(episode, epNumber) {
 }
 
 /**
- * Cancel all scheduled jobs for an episode
- */
-export function cleanupEpisodeJobs(episode, epNumber) {
-    const episodeKey = `${episode.aniDBAid}-${epNumber}`;
-    if (scheduledJobs.has(episodeKey)) {
-        const existing = scheduledJobs.get(episodeKey);
-        existing.jobs.forEach(job => job.cancel());
-        scheduledJobs.delete(episodeKey);
-        console.log(`✓ Cleaned up jobs for ${episode.animeTitle} Ep ${epNumber}`);
-    }
-}
-
-/**
  * Get all currently scheduled episode keys
  */
 export function getScheduledEpisodes() {
     return Array.from(scheduledJobs.keys());
+}
+
+/**
+ * Cancel and remove all scheduled episode jobs
+ */
+export function cleanupAllEpisodeJobs() {
+    const episodeKeys = Array.from(scheduledJobs.keys());
+    let cancelledCount = 0;
+
+    for (const episodeKey of episodeKeys) {
+        const existing = scheduledJobs.get(episodeKey);
+        if (!existing?.jobs?.length) {
+            scheduledJobs.delete(episodeKey);
+            continue;
+        }
+
+        existing.jobs.forEach(job => {
+            try {
+                job.cancel();
+                cancelledCount += 1;
+            } catch {
+                // Ignore cancel errors; proceed with cleanup
+            }
+        });
+
+        scheduledJobs.delete(episodeKey);
+    }
+
+    return { episodeCount: episodeKeys.length, cancelledCount };
 }
 
 /**

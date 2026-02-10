@@ -6,7 +6,7 @@
 import express from 'express';
 import { checkNyaas } from './jobs/episodeMonitor.js';
 import { scheduleDailyCleanup } from './jobs/dailyCleanup.js';
-import { createDownloadRouter } from './services/downloadClient.js';
+import { createDownloadRouter } from './http/downloadRouter.js';
 
 async function start() {
     console.log('🚀 Anime Release Tracker starting...\n');
