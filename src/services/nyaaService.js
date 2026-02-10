@@ -102,15 +102,3 @@ export async function scrapeForEpisode(animeTitle, epNumber) {
         return [];
     }
 }
-
-/**
- * Search for all releases of an anime (for initial check)
- */
-export async function searchAnime(animeTitle) {
-    try {
-        return await nyaa.scrapeSearchResults(animeTitle);
-    } catch (error) {
-        console.error(`✗ Search failed for ${animeTitle}:`, error.message);
-        return [];
-    }
-}

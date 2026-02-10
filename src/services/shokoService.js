@@ -23,27 +23,3 @@ export async function getTodayEpisodes(showAll = false) {
         return [];
     }
 }
-
-/**
- * Get series info by AniDB ID
- */
-export async function getSeriesByAniDBId(anidbId) {
-    try {
-        return await shoko.getSeriesByAniDBId(anidbId);
-    } catch (error) {
-        console.error(`✗ Error getting series info for anidb id ${anidbId}:`, error.message);
-        return null;
-    }
-}
-
-/**
- * Get episodes for a series
- */
-export async function getSeriesEpisodes(shokoSeriesId) {
-    try {
-        return await shoko.getEpisodesForSeries(shokoSeriesId);
-    } catch (error) {
-        console.error(`✗ Error getting episodes for series ${shokoSeriesId}:`, error.message);
-        return [];
-    }
-}

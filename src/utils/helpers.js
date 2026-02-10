@@ -24,13 +24,6 @@ export function extractGroupName(title) {
 }
 
 /**
- * Format a release object for logging
- */
-export function formatRelease(release) {
-    return `${release.title} (${release.codec}, ${release.fileSize})`;
-}
-
-/**
  * Generate a unique key for a release notification
  */
 export function generateReleaseKey(episode, release) {
