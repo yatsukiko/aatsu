@@ -10,7 +10,7 @@ import * as shoko from '../../lib/shoko.js';
  */
 export async function getTodayEpisodes(showAll = false) {
     try {
-        const episodes = await shoko.getAniDBCalendar(showAll, 1);
+        const episodes = await shoko.getCalendarEpisodes(showAll, 0);
         if (!episodes || episodes.length === 0) {
             console.log('ℹ No anime releases scheduled for today');
             return [];
