@@ -3,6 +3,17 @@ import { qBittorrentClient } from '@robertklep/qbittorrent';
 import {findFileByName, linkFileWithEpisode} from "../../lib/shoko.js";
 import { sendSimpleNotification } from '../utils/notification.js';
 
+const TORRENT_POLL_INTERVAL_MS = 15000;
+const TORRENT_MAX_WAIT_MS = 6 * 60 * 60 * 1000;
+const FILE_POLL_INTERVAL_MS = 30000;
+const FILE_MAX_WAIT_MS = 6 * 60 * 60 * 1000;
+const IMPORT_FOLDER_POLL_INTERVAL_MS = 60000;
+const IMPORT_FOLDER_MAX_WAIT_MS = 120000;
+const MATCHING_FILE_WAIT_MS = 5 * 60 * 1000;
+const IMPORT_COMPLETION_POLL_INTERVAL_MS = 60000;
+const IMPORT_COMPLETION_MAX_CHECKS = 60;
+const RETRY_LINK_INTERVAL_MS = 30000;
+
 function base32ToHex(base32) {
     const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
     const clean = String(base32).toUpperCase().replace(/=+$/, '');
@@ -55,7 +66,7 @@ function readToken(req) {
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-async function waitForTorrentCompletion(client, hash, intervalMs = 15000, maxWaitMs = 6 * 60 * 60 * 1000) {
+async function waitForTorrentCompletion(client, hash, intervalMs = TORRENT_POLL_INTERVAL_MS, maxWaitMs = TORRENT_MAX_WAIT_MS) {
     const startedAt = Date.now();
     while (Date.now() - startedAt < maxWaitMs) {
         const list = await client.torrents.info({ hashes: hash });
@@ -80,7 +91,7 @@ export function createDownloadRouter() {
     // this endpoint will always receive a single episode.
     // Implements polling + retries:
     // - Poll Shoko every 30s until the file appears
-    // - If file is in ImportFolderID === 2, poll every 60s until it changes
+    // - If file is in ManagedFolderID === 2, poll every 60s until it changes
     // - Retry linking until it succeeds (poll every 30s)
 
     const body = req.body || {};
@@ -119,8 +130,9 @@ export function createDownloadRouter() {
     const file = body.fileList[0];
     const magnetHash = extractInfoHashFromMagnet(body.magnet);
 
-    async function pollForFile(fileName, intervalMs = 30000) {
-        while (true) {
+    async function pollForFile(fileName, intervalMs = FILE_POLL_INTERVAL_MS, maxWaitMs = FILE_MAX_WAIT_MS) {
+        const startedAt = Date.now();
+        while (Date.now() - startedAt < maxWaitMs) {
             try {
                 const info = await findFileByName(fileName);
                 if (info && info.List && info.List.length > 0) {
@@ -129,29 +141,28 @@ export function createDownloadRouter() {
             } catch (err) {
                 console.warn('Error while querying Shoko for file:', err.message || err);
             }
-            console.log(`File ${fileName} not found in Shoko, retrying in ${intervalMs / 1000}s...`);
+            const waited = Date.now() - startedAt;
+            console.log(`File ${fileName} not found in Shoko (waited ${Math.round(waited/1000)}s), retrying...`);
             await sleep(intervalMs);
         }
+        console.warn(`Timed out after ${maxWaitMs / 1000}s waiting for file ${fileName} in Shoko`);
+        return null;
     }
 
-    async function waitForImportFolderLink(fileInfo, checkIntervalMs = 60000, maxWaitMs = 120000) {
-        // If ImportFolderID === 2 it means it's in Shoko's temporary import folder.
-        // We cannot reliably detect when Shoko finishes processing, so wait up to
-        // `maxWaitMs` total. If still in ImportFolderID === 2 after that, return
-        // so the caller can attempt manual linking.
+    async function waitForImportFolderLink(fileInfo, checkIntervalMs = IMPORT_FOLDER_POLL_INTERVAL_MS, maxWaitMs = IMPORT_FOLDER_MAX_WAIT_MS) {
         let info = fileInfo;
         let elapsed = 0;
         while (true) {
             const loc = info?.List?.[0]?.Locations?.[0];
-            if (!loc) return info; // nothing we can do
-            if (loc.ImportFolderID !== 2) return info; // ready for manual linking or already linked
+            if (!loc) return info;
+            if (loc.ManagedFolderID !== 2) return info;
 
             if (elapsed >= maxWaitMs) {
-                console.log(`ImportFolderID still 2 after ${elapsed}ms, proceeding to manual linking.`);
+                console.log(`ManagedFolderID still 2 after ${elapsed}ms, proceeding to manual linking.`);
                 return info;
             }
 
-            console.log(`File is in ImportFolderID=2 (waiting to be linked). Re-checking in ${checkIntervalMs / 1000}s...`);
+            console.log(`File is in ManagedFolderID=2 (waiting to be linked). Re-checking in ${checkIntervalMs / 1000}s...`);
             await sleep(checkIntervalMs);
             elapsed += checkIntervalMs;
             try {
@@ -162,8 +173,8 @@ export function createDownloadRouter() {
         }
     }
 
-    async function ensureLinked(fileId, episodeId, fileInfo, retryIntervalMs = 30000) {
-        if (fileInfo.List?.[0]?.Locations?.[0]?.ImportFolderID !== 2){
+    async function ensureLinked(fileId, episodeId, fileInfo, retryIntervalMs = RETRY_LINK_INTERVAL_MS) {
+        if (fileInfo.List?.[0]?.Locations?.[0]?.ManagedFolderID !== 2){
             console.log("Already linked")
             return true;
         }
@@ -186,7 +197,7 @@ export function createDownloadRouter() {
     (async () => {
         if (magnetHash) {
             try {
-                const completed = await waitForTorrentCompletion(client, magnetHash, 15000);
+                const completed = await waitForTorrentCompletion(client, magnetHash, TORRENT_POLL_INTERVAL_MS);
                 if (completed) {
                     const displayName = completed.name || body.title || body.fileList?.[0]?.name || 'torrent';
                     await sendSimpleNotification(
@@ -206,7 +217,12 @@ export function createDownloadRouter() {
 
         try {
             // Poll for the file to appear in Shoko
-            let fileInfo = await pollForFile(file.name, 30000);
+            let fileInfo = await pollForFile(file.name, FILE_POLL_INTERVAL_MS);
+
+            if (!fileInfo) {
+                console.warn('File did not appear in Shoko within timeout; aborting workflow.');
+                return;
+            }
 
             const fileName = fileInfo?.List?.[0]?.Locations?.[0]?.RelativePath;
             if (!fileName) {
@@ -219,8 +235,8 @@ export function createDownloadRouter() {
 
                 // Wait until either:
                 // - Shoko's reported relative path includes the expected filename, or
-                // - ImportFolderID becomes 1 (meaning Shoko imported/linked it)
-                async function waitForMatchingFileOrImported(expectedName, intervalMs = 30000, maxWaitMs = 300000) {
+                // - ManagedFolderID becomes 1 (meaning Shoko imported/linked it)
+                async function waitForMatchingFileOrImported(expectedName, intervalMs = FILE_POLL_INTERVAL_MS, maxWaitMs = MATCHING_FILE_WAIT_MS) {
                     let waited = 0;
                     while (waited <= maxWaitMs) {
                         try {
@@ -238,12 +254,12 @@ export function createDownloadRouter() {
                     return await findFileByName(expectedName);
                 }
 
-                const matchedInfo = await waitForMatchingFileOrImported(file.name, 30000, 300000);
+                const matchedInfo = await waitForMatchingFileOrImported(file.name, FILE_POLL_INTERVAL_MS, MATCHING_FILE_WAIT_MS);
                 fileInfo = matchedInfo || fileInfo;
             }
 
-            // If the file is waiting to be linked (ImportFolderID === 2), wait until it's ready
-            const updatedInfo = await waitForImportFolderLink(fileInfo, 60000);
+            // If the file is waiting to be linked (ManagedFolderID === 2), wait until it's ready
+            const updatedInfo = await waitForImportFolderLink(fileInfo, IMPORT_FOLDER_POLL_INTERVAL_MS);
 
             const fileId = updatedInfo?.List?.[0]?.ID;
             if (!fileId) {
@@ -252,16 +268,15 @@ export function createDownloadRouter() {
             }
 
             // Keep retrying the linking operation until it succeeds
-            await ensureLinked(fileId, body.episodeId, updatedInfo, 30000);
+            await ensureLinked(fileId, body.episodeId, updatedInfo, RETRY_LINK_INTERVAL_MS);
 
-            // Now poll until ImportFolderID indicates import completed (assume ImportFolderID === 1 means imported)
+            // Now poll until ManagedFolderID indicates import completed (assume ManagedFolderID === 1 means imported)
             try {
                 let finalInfo = updatedInfo;
-                const maxChecks = 60; // avoid infinite loop: ~60 minutes by default
                 let checks = 0;
-                while (checks < maxChecks) {
+                while (checks < IMPORT_COMPLETION_MAX_CHECKS) {
                     const loc = finalInfo?.List?.[0]?.Locations?.[0];
-                    if (loc && loc.ImportFolderID === 1) {
+                    if (loc && loc.ManagedFolderID === 1) {
                         const episodeTitle = body.title || `Episode ${body.episodeId}`;
                         await sendSimpleNotification(
                             `Episode ${episodeTitle} imported`,
@@ -270,7 +285,7 @@ export function createDownloadRouter() {
                         );
                         break;
                     }
-                    await sleep(60000);
+                    await sleep(IMPORT_COMPLETION_POLL_INTERVAL_MS);
                     try {
                         finalInfo = await findFileByName(finalInfo.List[0].Name || finalInfo.List[0].Locations[0].RelativePath);
                     } catch (err) {

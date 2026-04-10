@@ -48,21 +48,24 @@ export async function checkRSSForEpisode(animeTitle, epNumber) {
 /**
  * Retry a request with exponential backoff on 429 errors
  */
-export async function scrapeWithRetry(url, initialDelay = 0.2) {
+export async function scrapeWithRetry(url, initialDelay = 0.2, maxRetries = 10) {
     let delay = initialDelay;
-    while (true) {
+    let attempts = 0;
+    while (attempts < maxRetries) {
         try {
             return await nyaa.scrapeNyaaPage(url);
         } catch (error) {
             if (error.response && error.response.status === 429) {
-                delay += 0.5;
-                console.warn(`⚠ Rate limited (429). Retrying in ${delay}s...`);
+                attempts++;
+                delay = Math.min(delay + 0.5, 30);
+                console.warn(`⚠ Rate limited (429). Attempt ${attempts}/${maxRetries}, retrying in ${delay}s...`);
                 await new Promise(resolve => setTimeout(resolve, delay * 1000));
             } else {
                 throw error;
             }
         }
     }
+    throw new Error(`scrapeWithRetry failed after ${maxRetries} attempts due to 429 rate limiting`);
 }
 
 /**

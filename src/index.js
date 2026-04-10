@@ -4,9 +4,12 @@
  */
 
 import express from 'express';
-import { checkNyaas } from './jobs/episodeMonitor.js';
+import http from 'http';
+import { checkNyaas, cleanupAllEpisodeJobs } from './jobs/episodeMonitor.js';
 import { scheduleDailyCleanup } from './jobs/dailyCleanup.js';
 import { createDownloadRouter } from './http/downloadRouter.js';
+
+let server = null;
 
 async function start() {
     console.log('🚀 Anime Release Tracker starting...\n');
@@ -16,7 +19,7 @@ async function start() {
     app.use(createDownloadRouter());
 
     const port = Number(process.env.PORT || 3000);
-    app.listen(port, () => {
+    server = app.listen(port, () => {
         console.log(`✓ API server listening on port ${port}`);
     });
 
@@ -29,8 +32,24 @@ async function start() {
     console.log('✓ Tracker initialized and running\n');
 }
 
-function shutdown() {
+async function shutdown() {
     console.log('\nShutting down gracefully...');
+
+    // Cancel all scheduled episode monitoring jobs
+    const { episodeCount, cancelledCount } = cleanupAllEpisodeJobs();
+    console.log(`  Cancelled ${cancelledCount} episode job(s) across ${episodeCount} episode(s)`);
+
+    // Close HTTP server (stop accepting new connections)
+    if (server) {
+        await new Promise((resolve) => {
+            server.close(() => {
+                console.log('  HTTP server closed');
+                resolve();
+            });
+        });
+    }
+
+    console.log('  Shutdown complete');
     process.exit(0);
 }
 

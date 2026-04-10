@@ -40,7 +40,7 @@ async function scheduleEpisodeJobs(episode, epNumber) {
             console.error(`✗ RSS check failed:`, error.message);
         }
     });
-    jobs.push(rssJob);
+    if (rssJob) jobs.push(rssJob);
 
     // Schedule 10 PM final check via scrape
     const finalCheckJob = schedule.scheduleJob('0 22 * * *', async () => {
@@ -54,7 +54,7 @@ async function scheduleEpisodeJobs(episode, epNumber) {
             console.error(`✗ Final scrape check failed:`, error.message);
         }
     });
-    jobs.push(finalCheckJob);
+    if (finalCheckJob) jobs.push(finalCheckJob);
 
     scheduledJobs.set(episodeKey, { jobs });
     console.log(`✓ Scheduled jobs for ${episode.animeTitle} Ep ${epNumber} (RSS every 30 min, final check at 22:00)`);
