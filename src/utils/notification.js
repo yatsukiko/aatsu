@@ -70,6 +70,8 @@ export async function sendReleaseNotification(episode, release, groupName) {
                                 magnet: release.magnet,
                                 title: release.title,
                                 episodeId: episode.shokoEid,
+                                aniDBAid: episode.aniDBAid,
+                                epNumber: episode.epNumber,
                                 fileList: release.fileList
                             }),
                             clear: true

@@ -61,6 +61,31 @@ async function scheduleEpisodeJobs(episode, epNumber) {
 }
 
 /**
+ * Cancel monitoring jobs for a specific episode
+ */
+export function cancelEpisodeJobs(aniDBAid, epNumber) {
+    const episodeKey = `${aniDBAid}-${epNumber}`;
+    if (!scheduledJobs.has(episodeKey)) {
+        return { cancelledCount: 0 };
+    }
+
+    const existing = scheduledJobs.get(episodeKey);
+    let cancelledCount = 0;
+    if (existing?.jobs?.length) {
+        existing.jobs.forEach(job => {
+            try {
+                job.cancel();
+                cancelledCount += 1;
+            } catch {
+                // Ignore cancel errors
+            }
+        });
+    }
+    scheduledJobs.delete(episodeKey);
+    return { cancelledCount };
+}
+
+/**
  * Get all currently scheduled episode keys
  */
 export function getScheduledEpisodes() {

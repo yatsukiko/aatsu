@@ -5,6 +5,7 @@
 
 import { sendReleaseNotification } from '../utils/notification.js';
 import { generateReleaseKey, shouldIgnoreRelease, extractGroupName } from '../utils/helpers.js';
+import * as shoko from '../../lib/shoko.js';
 
 // Track which releases have been notified about to avoid duplicates
 // Persists across all checks (RSS every 30min + 10pm final) until 5am daily cleanup
@@ -13,13 +14,21 @@ export const notifiedReleases = new Set();
 /**
  * Process a found release:
  * 1. Filter out ignored groups
- * 2. If not already notified, send notification immediately
- * 3. Track as notified to avoid duplicates
+ * 2. Skip if episode already has files in Shoko
+ * 3. If not already notified, send notification immediately
+ * 4. Track as notified to avoid duplicates
  */
 export async function processFoundRelease(episode, release, source = 'unknown') {
     // Early filter: skip ignored release groups
     if (shouldIgnoreRelease(release.title)) {
         console.log(`⊘ Ignoring release from blocked group: ${release.title}`);
+        return false;
+    }
+
+    // Skip if episode already has files in Shoko (already imported/downloaded)
+    const existing = await shoko.hasEpisode(episode.aniDBAid, episode.epNumber);
+    if (existing.hasEpisode) {
+        console.log(`ℹ Episode ${episode.animeTitle} Ep ${episode.epNumber} already has files in Shoko, skipping release: ${release.title}`);
         return false;
     }
 
@@ -37,7 +46,7 @@ export async function processFoundRelease(episode, release, source = 'unknown') 
     // Send notification immediately
     console.log(`✓ Notifying: ${release.title} [${source}]`);
     await sendReleaseNotification(episode, release, groupName);
-    
+
     // Mark as notified to avoid duplicate notifications
     notifiedReleases.add(releaseKey);
     return true;

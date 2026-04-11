@@ -2,6 +2,7 @@ import express from 'express';
 import { qBittorrentClient } from '@robertklep/qbittorrent';
 import {findFileByName, linkFileWithEpisode} from "../../lib/shoko.js";
 import { sendSimpleNotification } from '../utils/notification.js';
+import { cancelEpisodeJobs } from '../jobs/episodeMonitor.js';
 
 const TORRENT_POLL_INTERVAL_MS = 15000;
 const TORRENT_MAX_WAIT_MS = 6 * 60 * 60 * 1000;
@@ -283,6 +284,14 @@ export function createDownloadRouter() {
                             `Episode ${episodeTitle} has been successfully imported.`,
                             ''
                         );
+
+                        // Cancel monitoring jobs for this episode since we have it now
+                        if (body.aniDBAid && body.epNumber) {
+                            const { cancelledCount } = cancelEpisodeJobs(body.aniDBAid, body.epNumber);
+                            if (cancelledCount > 0) {
+                                console.log(`  Cancelled ${cancelledCount} monitoring job(s) for Ep ${body.epNumber}`);
+                            }
+                        }
                         break;
                     }
                     await sleep(IMPORT_COMPLETION_POLL_INTERVAL_MS);
